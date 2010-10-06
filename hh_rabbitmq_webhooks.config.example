@@ -1,0 +1,14 @@
+{nostart, "True"}.
+{queue, <<"searchable.invalidates_to_frontik">>}.
+{cache_size, 1000}.
+
+% You can change following on working system:
+{url, "http://192.168.0.59:9300/hh/cacheinvalidate/"}.
+{max_alive_http_connections, 2}. % set to 0 if you need to stop working service
+{http_connection_timeout_ms, 1000}.
+{max_messages_in_post, 100}.
+
+% After changes you can reload config on working system with:
+%% # erl -sname node1 -remsh rabbit@example.com -setcookie `cat /var/lib/rabbitmq/.erlang.cookie`
+%% (rabbit@example.com)1> hh_rabbitmq_webhooks:check_config().
+%% (rabbit@example.com)2> gen_server:call({global,hh_rabbitmq_webhooks}, reload_config).

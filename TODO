@@ -1,0 +1,6 @@
+%Todo:
+%%dont log in sheduling if cache size 0
+%%drop messages if param 'drop' enabled in config
+%%when terminate - clear ets
+%%log http request time
+%%tests (use httpd)

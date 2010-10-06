@@ -1,0 +1,9 @@
+drop exchange 'changedSearchable';
+drop queue 'changedSearchable.frontik_tasks';
+drop queue 'changedSearchable.searcher_tasks';
+
+create durable fanout exchange 'changedSearchable' ;
+create durable queue 'changedSearchable.frontik_tasks';
+create durable queue 'changedSearchable.searcher_tasks';
+create route from 'changedSearchable' to 'changedSearchable.frontik_tasks';
+create route from 'changedSearchable' to 'changedSearchable.searcher_tasks';

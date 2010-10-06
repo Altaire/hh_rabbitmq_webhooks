@@ -1,0 +1,12 @@
+Source: hh-rabbitmq-webhooks-plugin
+Section: unknown
+Priority: extra
+Maintainer: Altaire <altaire@example.com>
+Build-Depends: debhelper (>= 7)
+Standards-Version: 3.8.1
+Homepage: http://www.rabbitmq.com/plugins.html
+
+Package: hh-rabbitmq-webhooks-plugin
+Architecture: all
+Depends: rabbitmq-server
+Description:  rabbitmq-server webhooks plugin 
