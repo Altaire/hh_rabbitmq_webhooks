@@ -9,24 +9,24 @@
 -define(ConfigPath, "/etc/rabbitmq/hh_rabbitmq_webhooks.config").
 
 start_link() -> 
-	rabbit_log:debug("Configuring HH RabbitMQ Webhooks... \n", []),
+	rabbit_log:info("Webhooks: Configuring HH RabbitMQ Webhooks... \n", []),
 	case check_config(?ConfigPath) of
 		{ok, Config} ->
-			rabbit_log:debug("Configuring HH RabbitMQ Webhooks done \n", []),
+			rabbit_log:info("Webhooks: Configuring HH RabbitMQ Webhooks done \n", []),
 			gen_server:start_link({global, ?MODULE}, ?MODULE, [Config], []);
 		{error, Error} ->
-			rabbit_log:debug("Invalid config ~p: ~p \n", [?ConfigPath, Error]),
+			rabbit_log:warning("Webhooks: Invalid config ~p: ~p \n", [?ConfigPath, Error]),
 			ignore
 	end.
 
 init([Config]) ->
-	rabbit_log:debug("Initializing.. \n", []),
+	rabbit_log:info("Webhooks: Initializing.. \n", []),
 	
 	{ok, Connection} = amqp_connection:start(direct),
-	rabbit_log:debug("direct connection opened: ~p  ... \n", [Connection]),
+	rabbit_log:info("Webhooks: direct connection opened: ~p  ... \n", [Connection]),
 
 	{ok, Channel} = amqp_connection:open_channel(Connection),
-	rabbit_log:debug("channel opened ~p ... \n", [Channel]),
+	rabbit_log:info("Webhooks: channel opened ~p ... \n", [Channel]),
 
 	%~ amqp_channel:call(Channel, #'exchange.delete'{exchange = proplists:get_value(exchange, Config)}),
 	%~ rabbit_log:debug("exchange.delete ...  \n", []),
@@ -47,18 +47,18 @@ init([Config]) ->
 	%~ rabbit_log:debug("queue bind ... \n", []),
 	
 	amqp_channel:call(Channel, #'basic.qos'{prefetch_count = proplists:get_value(cache_size, Config)}),
-	rabbit_log:debug("QOS enabled with prefetch count ~p ... \n", [proplists:get_value(cache_size, Config)]),
+	rabbit_log:info("Webhooks: QOS enabled with prefetch count ~p ... \n", [proplists:get_value(cache_size, Config)]),
 
 	Q = proplists:get_value(queue, Config),
 	#'basic.consume_ok'{ consumer_tag=Tag } = amqp_channel:subscribe(Channel, #'basic.consume'{ queue=Q, no_ack=false},  self()),
-	rabbit_log:debug("subscribe consumer ...\n", []),
+	rabbit_log:info("Webhooks: subscribe consumer ...\n", []),
 
 	%For test only:
 	%timer:apply_after(100, gen_server, cast, [{global, ?MODULE}, put_test_msg]),
 	%rabbit_log:debug("Put first test message ... \n", []),
 	
 	timer:apply_after(100, gen_server, cast, [{global, ?MODULE}, start_by_timeout]),
-	rabbit_log:debug("Start sheduler ... \n", []),
+	rabbit_log:info("Webhooks: Start cron task ... \n", []),
 	
 	pg2:start(),
 	PoolName=list_to_atom(atom_to_list(?MODULE) ++ "_http_requests_pool"),
@@ -69,18 +69,18 @@ init([Config]) ->
  	{ok, #state{ channel=Channel,  config=Config,  queue=Q, consumer_tag=Tag, http_requests_pool_name=PoolName, cache_tab_name=Tab}}.
 
 handle_call(reload_config, _From, State=#state{ channel=_Channel, config=_Config }) ->
-	rabbit_log:debug("Config reload request \n", []),
+	rabbit_log:info("Webhooks: Config reload request \n", []),
 	case check_config(?ConfigPath) of
 		{ok, NewConfig} ->
-			rabbit_log:debug("Configuring HH RabbitMQ Webhooks done \n", []),
+			rabbit_log:info("Webhooks: Configuring HH RabbitMQ Webhooks done \n", []),
 			{reply, "Config changed \n", State#state{config=NewConfig}};
 		{error, Error} ->
-			rabbit_log:debug("Invalid config ~p: ~p \n", [?ConfigPath, Error]),
+			rabbit_log:warning("Webhooks: Invalid config ~p: ~p \n", [?ConfigPath, Error]),
 			{reply, "Error while change config. See log \n", State}
 	end;
 
 handle_call(Msg, _From, State=#state{ channel=_Channel, config=_Config }) ->
-	rabbit_log:debug(" Unkown call: ~p~n State: ~p~n", [Msg, State]),
+	rabbit_log:warning(" Unkown call: ~p~n State: ~p~n", [Msg, State]),
 	{noreply, State}.
 
 
@@ -102,10 +102,10 @@ handle_call(Msg, _From, State=#state{ channel=_Channel, config=_Config }) ->
 
 %Started by timeout
 handle_cast(start_by_timeout, State=#state{ channel=Channel, config=Config, http_requests_pool_name=PName, cache_tab_name=Tab}) ->
-	rabbit_log:debug("Starting crontab in ~p \n", [now()]),
+	%~ rabbit_log:debug("Starting crontab in ~p \n", [now()]),
 
 	PoolSize = length(pg2:get_local_members(PName)),
-	rabbit_log:debug("Alive http connections: ~p\n", [PoolSize]),
+	%~ rabbit_log:debug("Alive http connections: ~p\n", [PoolSize]),
 	
 	case PoolSize < proplists:get_value(max_alive_http_connections, Config) of
 		true ->
@@ -115,13 +115,13 @@ handle_cast(start_by_timeout, State=#state{ channel=Channel, config=Config, http
 				{TgList, _} ->
 					 lists:concat(TgList)
 			end,
-			rabbit_log:debug("Get free messages from cache ~w (cache size ~p)\n", [TagsList, ets:info(Tab,size)]),
 
 			if 
 				length(TagsList) > 0 ->
 					Ref = make_ref(),
 					update_refs(Tab, Ref, TagsList),
-					rabbit_log:debug("Now messages ~w have ref ~p\n", [ ets:match(Tab, {'$1','_','_',Ref}), Ref]),
+					rabbit_log:info("Webhooks: Crontab: Get free messages from cache ~w (cache size ~p)\n", [TagsList, ets:info(Tab,size)]),
+					rabbit_log:info("Webhooks: Crontab: Now messages ~w have ref ~p\n", [ ets:match(Tab, {'$1','_','_',Ref}), Ref]),
 
 					%~ send_request(Channel, Ref, Config, Tab);
 					Pid = spawn( fun() -> send_request(Channel, Ref, Config, Tab) end),
@@ -135,11 +135,11 @@ handle_cast(start_by_timeout, State=#state{ channel=Channel, config=Config, http
 	end,
 
 	timer:apply_after(?ShedulerTimeout, gen_server, cast, [{global, ?MODULE}, start_by_timeout]),
-	rabbit_log:debug("Stopping crontab in ~p \n", [now()]),
+	%~ rabbit_log:debug("Stopping crontab in ~p \n", [now()]),
 	{noreply, State};
 
 handle_cast(Msg, State=#state{ channel=_Channel, config=_Config }) ->
-	rabbit_log:debug(" Unkown cast: ~p~n State: ~p~n", [Msg, State]),
+	rabbit_log:warning("Webhooks:  Unkown cast: ~p~n State: ~p~n", [Msg, State]),
 	{noreply, State}.
 
 
@@ -149,7 +149,7 @@ handle_info(#'basic.cancel_ok'{ consumer_tag=_Tag }, State) ->
 handle_info(#'basic.consume_ok'{ consumer_tag=_Tag }, State) ->
 	{noreply, State};
 
-%When message headers has valid format: [{Entity, signedint, ID}] send it or cache it
+%When message headers has valid format: [{<<"id">>,signedint,ID},{<<"docType">>,longstr,Entity}] send it or cache it
 handle_info({
 	#'basic.deliver'{ delivery_tag=DeliveryTag },  
 	#amqp_msg{ props=#'P_basic'{headers=  [{<<"id">>,signedint,ID},{<<"docType">>,longstr,Entity}]=Headers  }}=AmqpMsg
@@ -157,12 +157,12 @@ handle_info({
 	State=#state{ channel=Channel, config=Config, http_requests_pool_name=PName, cache_tab_name=Tab})
 	when is_integer(ID) andalso is_binary(Entity) ->
 
-	rabbit_log:debug("Get valid message : ~p \nMessage headers: ~p  Tag ~p in ~p \n", [AmqpMsg, Headers, DeliveryTag, now()]),
+	rabbit_log:info("Webhooks: Get valid message : ~p \nMessage headers: ~p  Tag ~p in ~p \n", [AmqpMsg, Headers, DeliveryTag, now()]),
 	PostMsg = binary_to_list(Entity) ++ ":" ++ integer_to_list(ID) ++ " ",
 	ets:insert(Tab, {DeliveryTag, PostMsg, now(), noref}),
 
 	PoolSize = length(pg2:get_local_members(PName)),
-	rabbit_log:debug("Alive http connections: ~p\n", [PoolSize]),
+	rabbit_log:info("Webhooks: Alive http connections: ~p\n", [PoolSize]),
 	
 	case PoolSize < proplists:get_value(max_alive_http_connections, Config) of
 		true ->
@@ -176,16 +176,16 @@ handle_info({
 					 lists:concat(TgList)
 			end,
 			
-			rabbit_log:debug("Get free messages from cache ~w (cache size ~p)\n", [TagsList, ets:info(Tab,size)]),
+			rabbit_log:info("Webhooks: Get free messages from cache ~w (cache size ~p)\n", [TagsList, ets:info(Tab,size)]),
 			update_refs(Tab, Ref, TagsList),
-			rabbit_log:debug("Now messages ~w have ref ~p\n", [ ets:match(Tab, {'$1','_','_',Ref}), Ref]),
+			rabbit_log:info("Webhooks: Now messages ~w have ref ~p\n", [ ets:match(Tab, {'$1','_','_',Ref}), Ref]),
 
 			%~ send_request(Channel, Ref, Config, Tab);
 			Pid = spawn( fun() -> send_request(Channel, Ref, Config, Tab) end),
 			pg2:join(PName, Pid);
 			
 		false ->
-			rabbit_log:debug("Add message ~p with tag ~p to cache only in ~p (cache size ~p) \n", [PostMsg, DeliveryTag, now(), ets:info(Tab,size)])
+			rabbit_log:info("Webhooks: Add message ~p with tag ~p to cache only in ~p (cache size ~p) \n", [PostMsg, DeliveryTag, now(), ets:info(Tab,size)])
 	end,
 	{noreply, State};
 
@@ -196,17 +196,17 @@ handle_info({
 	}, 
 	State=#state{ channel=Channel})->
 
-	rabbit_log:debug("Get invalid message: ~p \n Message headers: ~p \n Delete it \n", [AmqpMsg, Headers]),
+	rabbit_log:warning("Webhooks: Get invalid message: ~p \n Message headers: ~p \n Delete it \n", [AmqpMsg, Headers]),
 	amqp_channel:call(Channel, #'basic.ack'{ delivery_tag=DeliveryTag }),
 	{noreply, State};
 
 handle_info(Msg, State) ->
-	rabbit_log:debug(" Unkown message: ~p~n State: ~p~n", [Msg, State]),
+	rabbit_log:warning("Webhooks:  Unkown message: ~p~n State: ~p~n", [Msg, State]),
 	{noreply, State}.
 
 
 terminate(_, #state{ channel=Channel, config=_Webhook, queue=_Q, consumer_tag=Tag }) -> 
-	rabbit_log:debug("############ Terminating ~p ~p~n", [self(), Tag]),
+	rabbit_log:warning("Webhooks: ############ Terminating ~p ~p~n", [self(), Tag]),
 	%TODO: unsubscribe
 	%TODO: refuse all message in ets
 	if
@@ -230,27 +230,27 @@ update_refs(Tab, Ref, [HTag|T])->
 
 send_request(Channel, Ref, Config, Tab) ->
 	%~ register(ref_to_atom(Ref), self()),
-	rabbit_log:debug("Ready to send messages with ref:  ~p  \n", [Ref]),
+	rabbit_log:info("Webhooks: Ready to send messages with ref:  ~p  \n", [Ref]),
 
 	Url =  proplists:get_value(url, Config),
 	Timeout =  proplists:get_value(http_connection_timeout_ms, Config),
 	DeliveryTags = lists:concat(ets:match(Tab, {'$1','_','_',Ref})),
 	Payload = lists:concat(lists:concat(ets:match(Tab, {'_', '$1', '_',Ref}))),
-	rabbit_log:debug("URL: ~p  Method: ~p Message: ~p Timeout: ~p Tags ~w  in ~p\n", [Url, "POST", Payload, Timeout, DeliveryTags, now()]),
+	rabbit_log:info("Webhooks: URL: ~p  Method: ~p Message: ~p Timeout: ~p Tags ~w  in ~p\n", [Url, "POST", Payload, Timeout, DeliveryTags, now()]),
 			
 	try
 		case lhttpc:request(Url, _Method="POST", _HttpHdrs =[], Payload, Timeout) of
 			% Only ack if the server returns 200.
 			{ok, {{Status, _}, Hdrs, Response}} when Status =:= 200->
-				rabbit_log:debug("200:  Headers: ~p Response: ~p in ~p\n", [Hdrs, Response, now()]),
+				rabbit_log:info("Webhooks: 200:  Headers: ~p Response: ~p in ~p\n", [Hdrs, Response, now()]),
 				ets:match_delete(Tab, {'$1','_','_',Ref}),
 				lists:foreach(fun(Tag) -> amqp_channel:call(Channel, #'basic.ack'{delivery_tag=Tag}) end, DeliveryTags);
 			Else ->
-				rabbit_log:debug("Http client error response:~p  in ~p\n", [Else, now()]),
+				rabbit_log:warning("Webhooks: Http client error response:~p  in ~p\n", [Else, now()]),
 				lists:foreach(fun(Tag) -> ets:update_element(Tab, Tag, [{?RefPosInETS, noref}]) end, DeliveryTags)
 		end
 	catch Ex:E -> 
-		rabbit_log:debug("Error requesting ~p: ~p ~p in ~p~n", [Url, Ex, E, now()]),
+		rabbit_log:warning("Webhooks: Error requesting ~p: ~p ~p in ~p~n", [Url, Ex, E, now()]),
 		lists:foreach(fun(Tag) -> ets:update_element(Tab, Tag, [{?RefPosInETS, noref}]) end, DeliveryTags)
 	end.
 
@@ -264,7 +264,7 @@ check_config(Path) ->
 		case hhrmq_lib_misc:consult(Path) of
 			{ok, Config} ->
 			
-				rabbit_log:debug("Read config from ~p:  ~p  \n", [Path, Config]),
+				rabbit_log:info("Webhooks: Read config from ~p:  ~p  \n", [Path, Config]),
 				ErrorAcc = check_param(nostart, proplists:get_value(nostart, Config), ""),
 				ErrorAcc2 = check_param(queue, proplists:get_value(queue, Config), ErrorAcc),
 				ErrorAcc3 = check_param(cache_size, proplists:get_value(cache_size, Config), ErrorAcc2),
@@ -272,12 +272,13 @@ check_config(Path) ->
 				ErrorAcc5 = check_param(max_messages_in_post, proplists:get_value(max_messages_in_post, Config),ErrorAcc4),
 				ErrorAcc6 = check_param(max_alive_http_connections, proplists:get_value(max_alive_http_connections, Config),ErrorAcc5),
 				ErrorAcc7 = check_param(http_connection_timeout_ms, proplists:get_value(http_connection_timeout_ms, Config),ErrorAcc6),
-				rabbit_log:debug("Config errors: ~s  \n", [ErrorAcc7]),
 				
 				case ErrorAcc7 of
 					"" -> 
+						rabbit_log:info("Webhooks: Config has no errors \n", []),
 						{ok, Config};
 					Other->
+						rabbit_log:warning("Webhooks: Config errors: ~s  \n", [ErrorAcc7]),
 						{error, Other}
 				end;
 
@@ -286,7 +287,7 @@ check_config(Path) ->
 		end
 
 	catch Ex:E -> 
-		rabbit_log:debug("Error while check config ~p: ~p ~p. Bad config file or queue does not exist ~n", [Path, Ex, E]),
+		rabbit_log:warning("Webhooks: Error while check config ~p: ~p ~p. Bad config file or queue does not exist ~n", [Path, Ex, E]),
 		{error, {Ex, E}}
 	end.
 

@@ -8,5 +8,5 @@ Homepage: http://www.rabbitmq.com/plugins.html
 
 Package: hh-rabbitmq-webhooks-plugin
 Architecture: all
-Depends: rabbitmq-server
+Depends: rabbitmq-common-plugins
 Description:  rabbitmq-server webhooks plugin 
