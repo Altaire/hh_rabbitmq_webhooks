@@ -1,3 +1,9 @@
+hh-rabbitmq-webhooks-plugin (2.1.1-1) unstable; urgency=low
+
+  * up to 2.1.1
+
+ -- Altaire <altaire@example.com>  Mon, 25 Oct 2010 19:00:52 +0400
+
 hh-rabbitmq-webhooks-plugin (2.1.0-1) unstable; urgency=low
 
   * Initial release
