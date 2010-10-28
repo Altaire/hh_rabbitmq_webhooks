@@ -120,8 +120,8 @@ handle_cast(start_by_timeout, State=#state{ channel=Channel, config=Config, http
 				length(TagsList) > 0 ->
 					Ref = make_ref(),
 					update_refs(Tab, Ref, TagsList),
-					rabbit_log:info("Webhooks: Crontab: Get free messages from cache ~w (cache size ~p)\n", [TagsList, ets:info(Tab,size)]),
-					rabbit_log:info("Webhooks: Crontab: Now messages ~w have ref ~p\n", [ ets:match(Tab, {'$1','_','_',Ref}), Ref]),
+					%~ rabbit_log:info("Webhooks: Crontab: Get free messages from cache ~w (cache size ~p)\n", [TagsList, ets:info(Tab,size)]),
+					%~ rabbit_log:info("Webhooks: Crontab: Now messages ~w have ref ~p\n", [ ets:match(Tab, {'$1','_','_',Ref}), Ref]),
 
 					%~ send_request(Channel, Ref, Config, Tab);
 					Pid = spawn( fun() -> send_request(Channel, Ref, Config, Tab) end),
@@ -157,12 +157,12 @@ handle_info({
 	State=#state{ channel=Channel, config=Config, http_requests_pool_name=PName, cache_tab_name=Tab})
 	when is_integer(ID) andalso is_binary(Entity) ->
 
-	rabbit_log:info("Webhooks: Get valid message : ~p \nMessage headers: ~p  Tag ~p in ~p \n", [AmqpMsg, Headers, DeliveryTag, now()]),
+	%~ rabbit_log:info("Webhooks: Get valid message : ~p \nMessage headers: ~p  Tag ~p in ~p \n", [AmqpMsg, Headers, DeliveryTag, now()]),
 	PostMsg = binary_to_list(Entity) ++ ":" ++ integer_to_list(ID) ++ " ",
 	ets:insert(Tab, {DeliveryTag, PostMsg, now(), noref}),
 
 	PoolSize = length(pg2:get_local_members(PName)),
-	rabbit_log:info("Webhooks: Alive http connections: ~p\n", [PoolSize]),
+	%~ rabbit_log:info("Webhooks: Alive http connections: ~p\n", [PoolSize]),
 	
 	case PoolSize < proplists:get_value(max_alive_http_connections, Config) of
 		true ->
@@ -176,16 +176,17 @@ handle_info({
 					 lists:concat(TgList)
 			end,
 			
-			rabbit_log:info("Webhooks: Get free messages from cache ~w (cache size ~p)\n", [TagsList, ets:info(Tab,size)]),
+			%~ rabbit_log:info("Webhooks: Get free messages from cache ~w (cache size ~p)\n", [TagsList, ets:info(Tab,size)]),
 			update_refs(Tab, Ref, TagsList),
-			rabbit_log:info("Webhooks: Now messages ~w have ref ~p\n", [ ets:match(Tab, {'$1','_','_',Ref}), Ref]),
+			%~ rabbit_log:info("Webhooks: Now messages ~w have ref ~p\n", [ ets:match(Tab, {'$1','_','_',Ref}), Ref]),
 
 			%~ send_request(Channel, Ref, Config, Tab);
 			Pid = spawn( fun() -> send_request(Channel, Ref, Config, Tab) end),
 			pg2:join(PName, Pid);
 			
 		false ->
-			rabbit_log:info("Webhooks: Add message ~p with tag ~p to cache only in ~p (cache size ~p) \n", [PostMsg, DeliveryTag, now(), ets:info(Tab,size)])
+			do_nothing
+			%~ rabbit_log:info("Webhooks: Add message ~p with tag ~p to cache only in ~p (cache size ~p) \n", [PostMsg, DeliveryTag, now(), ets:info(Tab,size)])
 	end,
 	{noreply, State};
 
@@ -230,19 +231,19 @@ update_refs(Tab, Ref, [HTag|T])->
 
 send_request(Channel, Ref, Config, Tab) ->
 	%~ register(ref_to_atom(Ref), self()),
-	rabbit_log:info("Webhooks: Ready to send messages with ref:  ~p  \n", [Ref]),
+	%~ rabbit_log:info("Webhooks: Ready to send messages with ref:  ~p  \n", [Ref]),
 
 	Url =  proplists:get_value(url, Config),
 	Timeout =  proplists:get_value(http_connection_timeout_ms, Config),
 	DeliveryTags = lists:concat(ets:match(Tab, {'$1','_','_',Ref})),
 	Payload = lists:concat(lists:concat(ets:match(Tab, {'_', '$1', '_',Ref}))),
-	rabbit_log:info("Webhooks: URL: ~p  Method: ~p Message: ~p Timeout: ~p Tags ~w  in ~p\n", [Url, "POST", Payload, Timeout, DeliveryTags, now()]),
+	%~ rabbit_log:info("Webhooks: URL: ~p  Method: ~p Message: ~p Timeout: ~p Tags ~w  in ~p\n", [Url, "POST", Payload, Timeout, DeliveryTags, now()]),
 			
 	try
 		case lhttpc:request(Url, _Method="POST", _HttpHdrs =[], Payload, Timeout) of
 			% Only ack if the server returns 200.
 			{ok, {{Status, _}, Hdrs, Response}} when Status =:= 200->
-				rabbit_log:info("Webhooks: 200:  Headers: ~p Response: ~p in ~p\n", [Hdrs, Response, now()]),
+				%~ rabbit_log:info("Webhooks: 200:  Headers: ~p Response: ~p in ~p\n", [Hdrs, Response, now()]),
 				ets:match_delete(Tab, {'$1','_','_',Ref}),
 				lists:foreach(fun(Tag) -> amqp_channel:call(Channel, #'basic.ack'{delivery_tag=Tag}) end, DeliveryTags);
 			Else ->
