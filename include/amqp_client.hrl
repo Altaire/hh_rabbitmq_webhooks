@@ -23,10 +23,10 @@
 %%   Contributor(s): Ben Hood <0x6e6562@gmail.com>.
 %%
 
--include_lib("/usr/lib/rabbitmq/lib/rabbitmq_server-2.1.0/include/rabbit.hrl").
--include_lib("/usr/lib/rabbitmq/lib/rabbitmq_server-2.1.0/include/rabbit_framing.hrl").
-%-include_lib("/usr/lib/erlang/lib/rabbitmq-server-2.1.0/include/rabbit.hrl").
-%-include_lib("/usr/lib/erlang/lib/rabbitmq-server-2.1.0/include/rabbit_framing.hrl").
+-include_lib("/usr/lib/rabbitmq/lib/rabbitmq_server-2.2.0/include/rabbit.hrl").
+-include_lib("/usr/lib/rabbitmq/lib/rabbitmq_server-2.2.0/include/rabbit_framing.hrl").
+%-include_lib("/usr/lib/erlang/lib/rabbitmq-server-2.2.0/include/rabbit.hrl").
+%-include_lib("/usr/lib/erlang/lib/rabbitmq-server-2.2.0/include/rabbit_framing.hrl").
 
 -define(PROTOCOL_VERSION_MAJOR, 0).
 -define(PROTOCOL_VERSION_MINOR, 9).

@@ -1,3 +1,9 @@
+hh-rabbitmq-webhooks-plugin (2.2.0-1) unstable; urgency=low
+
+  * remove some logs
+
+ -- Altaire <altaire@example.com>  Mon, 8 Dec 2010 19:00:52 +0400
+
 hh-rabbitmq-webhooks-plugin (2.1.1-2) unstable; urgency=low
 
   * remove some logs
